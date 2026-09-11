@@ -148,7 +148,9 @@ def show_result(result):
 def calculator():
     st.header("CRC Calculator")
     input_type = st.selectbox("Input type", ["Binary", "Text", "File"])
-    algorithm = st.selectbox("CRC algorithm", list(CRC_ALGORITHMS))
+    algorithm = st.selectbox(
+        "CRC algorithm", list(CRC_ALGORITHMS), key="calculator_algorithm"
+    )
     data = ""
     label = ""
 
@@ -177,7 +179,7 @@ def calculator():
             st.session_state.last_result = result
             st.session_state.last_algorithm = algorithm
             add_history(label, algorithm, result["remainder"])
-            show_result(result)
+            st.rerun()
         except ValueError as error:
             st.error(str(error))
 
@@ -203,13 +205,18 @@ def verification():
             result = verify_crc(codeword, algorithm)
             status = "NO ERROR DETECTED" if result["valid"] else "ERROR DETECTED"
             add_history("Verification", algorithm, result["remainder"], status)
-            if result["valid"]:
-                st.success("✅ NO ERROR DETECTED")
-            else:
-                st.error("❌ ERROR DETECTED")
-            st.write("Verification remainder:", result["remainder"])
+            st.session_state.last_verification = result
+            st.rerun()
         except ValueError as error:
             st.error(str(error))
+
+    if st.session_state.last_verification:
+        result = st.session_state.last_verification
+        if result["valid"]:
+            st.success("✅ NO ERROR DETECTED")
+        else:
+            st.error("❌ ERROR DETECTED")
+        st.write("Verification remainder:", result["remainder"])
 
 
 def error_simulation():
@@ -224,8 +231,20 @@ def error_simulation():
     if st.button("Flip bit and verify", type="primary"):
         corrupted = flip_bit(original, position)
         result = verify_crc(corrupted, algorithm)
-        st.write("Corrupted codeword:", corrupted)
-        st.write("Changed bit position:", position)
+        status = "NO ERROR DETECTED" if result["valid"] else "ERROR DETECTED"
+        add_history("Verification", algorithm, result["remainder"], status)
+        st.session_state.last_simulation = {
+            "corrupted": corrupted,
+            "position": position,
+            "result": result,
+        }
+        st.rerun()
+
+    if st.session_state.last_simulation:
+        simulation = st.session_state.last_simulation
+        result = simulation["result"]
+        st.write("Corrupted codeword:", simulation["corrupted"])
+        st.write("Changed bit position:", simulation["position"])
         st.write("Remainder:", result["remainder"])
         st.error("❌ ERROR DETECTED" if not result["valid"] else "NO ERROR DETECTED")
 
@@ -256,6 +275,8 @@ def main():
         st.session_state.history = []
         st.session_state.last_result = None
         st.session_state.last_algorithm = "CRC-3"
+        st.session_state.last_verification = None
+        st.session_state.last_simulation = None
     st.sidebar.markdown('<div class="sidebar-brand">CRC<br>Dashboard</div>', unsafe_allow_html=True)
     st.title("CRC ERROR DETECTION SYSTEM")
     st.caption("Cyclic Redundancy Check Analyzer")
@@ -267,7 +288,10 @@ def main():
     metric_one.metric("Calculations", calculations)
     metric_two.metric("Verifications", len(verifications))
     metric_three.metric("Errors detected", errors)
-    metric_four.metric("Current algorithm", st.session_state.last_algorithm)
+    current_algorithm = st.session_state.get(
+        "calculator_algorithm", st.session_state.last_algorithm
+    )
+    metric_four.metric("Current algorithm", current_algorithm)
     page = st.sidebar.radio("Navigation", ["CRC Calculator", "CRC Verification", "Error Simulation", "Testing", "History", "About CRC"])
     st.sidebar.info("A simple B.Tech lab project using Python and Streamlit.")
     if page == "CRC Calculator": calculator()
